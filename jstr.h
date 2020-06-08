@@ -1,0 +1,17 @@
+#ifndef JSTR_H
+#define JSTR_H
+
+typedef char * jstr;
+
+#define JSTR_INVALID_BYTE 0xC0
+
+#define JSTR(j) ((j)+1)
+
+#define JSTR_VALID(j) ((unsigned char)(*(j)) == JSTR_INVALID_BYTE)
+
+jstr newJstr(char *str, size_t len);
+int cmpJstr(const jstr str1, const jstr str2);
+size_t lenJstr(const jstr str);
+void destroyJstr(jstr str);
+
+#endif
