@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -18,19 +19,26 @@ static struct mapEntry *newMapEntry(char *key,
     return e;
 }
 
-void initMap(struct map *map,
-            u64 cap,
-            float loadFactor,
-            void (*destroyValFn)(void *val))
+struct map *newMap(u64 cap,
+                   float loadFactor,
+                   void (*destroyValFn)(void *val))
 {
+    struct map *map;
+
+    map = malloc(sizeof(*map));
+    if (!map) return NULL;
     map->cap = cap;
     map->count = 0;
     map->loadFactor = loadFactor;
     map->threshold = (u64)(cap * loadFactor);
     map->destroyValFn = destroyValFn;
     map->table = malloc(sizeof(*map->table)*cap);
-    if (map->table)
-        memset(map->table, 0, sizeof(*map->table)*cap);
+    if (!map->table) {
+        free(map);
+        return NULL;
+    }
+    memset(map->table, 0, sizeof(*map->table)*cap);
+    return map;
 }
 
 void destroyMap(struct map *map)
@@ -50,6 +58,7 @@ void destroyMap(struct map *map)
     }
 
     free(map->table);
+    free(map);
 }
 
 static u64 djb2Hash(unsigned char *s, u64 len)
@@ -62,9 +71,7 @@ static u64 djb2Hash(unsigned char *s, u64 len)
 
 static inline u64 genHash(char *s)
 {
-    if (JSTR_VALID(s))
-        s = JSTR(s);
-    return djb2Hash((unsigned char *)s, lenJstr(s));
+    return djb2Hash((unsigned char *)JSTR(s), lenJstr(s));
 }
 
 static void _rehashMap(struct map *map)

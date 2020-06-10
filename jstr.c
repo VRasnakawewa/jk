@@ -14,14 +14,18 @@ struct jstrHeader {
 jstr newJstr(char *str, size_t len)
 {
     if (!len)
-        len = strlen(str)+1;
+        len = strlen(str);
 
     struct jstrHeader *h;
 
-    h = malloc(sizeof(*h) + len+1);
+    h = malloc(sizeof(*h) +
+        len + 
+        1 + /* first byte */
+        1); /* last byte */
     if (!h) return NULL;
     h->len = len;
-    h->buf[0] = JSTR_INVALID_BYTE;
+    h->buf[0] = JSTR_INVALID_BYTE; /* set first byte */
+    h->buf[len+1] = '\0';          /* set last byte */
     memcpy(JSTR(h->buf), str, len);
     return h->buf;
 }

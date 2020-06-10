@@ -5,9 +5,9 @@ typedef char * jstr;
 
 #define JSTR_INVALID_BYTE 0xC0
 
-#define JSTR(j) ((j)+1)
-
 #define JSTR_VALID(j) ((unsigned char)(*(j)) == JSTR_INVALID_BYTE)
+
+#define JSTR(j) ((JSTR_VALID(j)) ? ((j)+1) : (j))
 
 jstr newJstr(char *str, size_t len);
 int cmpJstr(const jstr str1, const jstr str2);

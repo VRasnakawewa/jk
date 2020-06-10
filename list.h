@@ -10,9 +10,9 @@ struct list {
     void (*destroyValFn)(void *val);
 };
 
-#define LIST_ALLOC_FAILED(list) (!(list)->values)
+#define LIST_ALLOC_FAILED(list) (!(list) || !(list)->values)
 
-void initList(struct list *list, u64 cap, void (*destroyValFn)(void *val));
+struct list *newList(u64 cap, void (*destroyValFn)(void *val));
 void destroyList(struct list *list);
 void addValList(struct list *list, void *val);
 

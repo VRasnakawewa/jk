@@ -3,25 +3,34 @@
 #include "common.h"
 #include "list.h"
 
-void initList(struct list *list, u64 cap, void (*destroyValFn)(void *val))
+struct list *newList(u64 cap, void (*destroyValFn)(void *val))
 {
+    struct list *list;
     void **values;
 
-    values = malloc(sizeof(*values));
-    if (!values) return;
+    list = malloc(sizeof(*list));
+    if (!list) return NULL;
+    values = malloc(sizeof(*values)*cap);
+    if (!values) {
+        free(list);
+        return NULL;
+    }
     list->values = values;
     list->len = 0;
     list->cap = cap;
     list->destroyValFn = destroyValFn;
+    return list;
 }
 
 void destroyList(struct list *list)
 {
+    if (!list) return;
     if (list->destroyValFn) {
         while (list->len-- > 0)
             list->destroyValFn(list->values[list->len]);
     }
     free(list->values);
+    free(list);
 }
 
 static void _resizeList(struct list *list, u64 newcap)
