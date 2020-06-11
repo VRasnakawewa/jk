@@ -3,7 +3,7 @@
 #include "common.h"
 #include "list.h"
 
-struct list *newList(u64 cap, void (*destroyValFn)(void *val))
+struct list *listNew(u64 cap, void (*destroyValFn)(void *val))
 {
     struct list *list;
     void **values;
@@ -22,7 +22,7 @@ struct list *newList(u64 cap, void (*destroyValFn)(void *val))
     return list;
 }
 
-void destroyList(struct list *list)
+void listDestroy(struct list *list)
 {
     if (!list) return;
     if (list->destroyValFn) {
@@ -47,7 +47,7 @@ static void _growList(struct list *list)
         list->cap + (list->cap >> 1));
 }
 
-void addValList(struct list *list, void *val)
+void listAdd(struct list *list, void *val)
 {
     if (list->len >= list->cap) {
         _growList(list);

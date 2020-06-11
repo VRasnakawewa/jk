@@ -12,8 +12,8 @@ struct list {
 
 #define LIST_ALLOC_FAILED(list) (!(list) || !(list)->values)
 
-struct list *newList(u64 cap, void (*destroyValFn)(void *val));
-void destroyList(struct list *list);
-void addValList(struct list *list, void *val);
+struct list *listNew(u64 cap, void (*destroyValFn)(void *val));
+void listDestroy(struct list *list);
+void listAdd(struct list *list, void *val);
 
 #endif

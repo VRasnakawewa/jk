@@ -19,7 +19,7 @@ static struct mapEntry *newMapEntry(char *key,
     return e;
 }
 
-struct map *newMap(u64 cap,
+struct map *mapNew(u64 cap,
                    float loadFactor,
                    void (*destroyValFn)(void *val))
 {
@@ -41,7 +41,7 @@ struct map *newMap(u64 cap,
     return map;
 }
 
-void destroyMap(struct map *map)
+void mapDestroy(struct map *map)
 {
     if (!map) return;
 
@@ -84,7 +84,7 @@ static void _rehashMap(struct map *map)
 
     newtab = malloc(sizeof(*newtab)*newcap);
     if (!newtab) {
-        destroyMap(map);
+        mapDestroy(map);
         map->table = NULL;
         return;
     }
@@ -108,7 +108,7 @@ static void _rehashMap(struct map *map)
     map->table = newtab;
 }
 
-void *putValMap(struct map *map, char *key, void *val)
+void *mapPut(struct map *map, char *key, void *val)
 {
     u64 index = genHash(key) % map->cap;
 
@@ -133,7 +133,7 @@ void *putValMap(struct map *map, char *key, void *val)
 
     struct mapEntry *new = newMapEntry(key, val, map->table[index]);
     if (!new) {
-        destroyMap(map);
+        mapDestroy(map);
         destroyJstr(key);
         map->table = NULL;
         return NULL;
@@ -144,7 +144,7 @@ void *putValMap(struct map *map, char *key, void *val)
     return NULL;
 }
 
-void *getValMap(struct map *map, char *key)
+void *mapGet(struct map *map, char *key)
 {
     struct mapEntry *e = map->table[genHash(key) % map->cap];
 

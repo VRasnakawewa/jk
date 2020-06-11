@@ -1,12 +1,14 @@
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <assert.h>
 
 #include "common.h"
 #include "ben.h"
+#include "tracker.h"
 
 #define READ_CHUNK_SIZE 1024
-jstr readTorrentFile(const char *filename)
+static jstr readFile(const char *filename)
 {
     FILE *file = fopen(filename, "rb");
     if (!file) 
@@ -32,17 +34,12 @@ int main(int argc, char **argv)
     struct benNode *node;
     jstr data;  
 
-    data = readTorrentFile(filename);
-    if (!data) return 1;
-    r = benDecode(&node, data);
-    if (r != BEN_OK) {
-        fprintf(stderr, "error: couldn't decode the torrent: %s\n", filename);
-        return 1;
-    }
-    struct map *map = BEN_AS_MAP(node);
-    jstr tracker = BEN_AS_STR(getValMap(map, "announce"));
-    printf("%s\n", JSTR(tracker));
-
-    benDestroy(node);
+    data = readFile(filename);
+    unsigned char hash[20];
+    calculateInfoHash(hash, JSTR(data), lenJstr(data));
+    benDecode(&node, JSTR(data), lenJstr(data));
+    destroyJstr(data);
+    benDestroyBenNode(node);
     return 0;
 }
+

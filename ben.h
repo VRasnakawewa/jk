@@ -10,17 +10,17 @@
 #define BEN_ERR 1
 
 #define BEN_TYPE_INT 0 
-#define BEN_TYPE_STR 1
+#define BEN_TYPE_JSTR 1
 #define BEN_TYPE_LIST 2
 #define BEN_TYPE_MAP 3
 
-#define BEN_AS_INT(node) \
+#define benAsInt(node) \
     (((struct benNode *)(node))->value.i)
-#define BEN_AS_STR(node) \
+#define benAsJstr(node) \
     (((struct benNode *)(node))->value.s)
-#define BEN_AS_LIST(node) \
+#define benAsList(node) \
     (((struct benNode *)(node))->value.l)
-#define BEN_AS_MAP(node) \
+#define benAsMap(node) \
     (((struct benNode *)(node))->value.m)
 
 struct benNode {
@@ -33,7 +33,7 @@ struct benNode {
     int type;
 };
 
-int benDecode(struct benNode **node, jstr data);
-void benDestroy(void *node);
+int benDecode(struct benNode **node, unsigned char *data, u64 len);
+void benDestroyBenNode(void *node);
 
 #endif
