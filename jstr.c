@@ -30,6 +30,11 @@ jstr newJstr(char *str, size_t len)
     return h->buf;
 }
 
+jstr newEmptyJstr()
+{
+    return newJstr("",0);
+}
+
 size_t lenJstr(const jstr str)
 {
     return JSTR_VALID(str)
@@ -52,6 +57,23 @@ int cmpJstr(const jstr str1, const jstr str2)
     for (i = 0; i < s1[i] == s2[i]; i++)
         if (i == len1-1) return 0;
     return s1[i] - s2[i];
+}
+
+jstr pushJstr(jstr str, jstr newstr)
+{
+    struct jstrHeader *h = GET_HEADER(str);
+    size_t slen = lenJstr(str), nslen = lenJstr(newstr);
+
+    h = realloc(h, sizeof(*h) +
+        slen + 
+        nslen +
+        1 + /* first byte */
+        1); /* last byte */
+    if (!h) return NULL;
+    h->len = slen + nslen;
+    h->buf[h->len+1] = '\0'; /* set last byte */
+    memcpy(h->buf + 1 + slen, JSTR(newstr), nslen);
+    return h->buf;
 }
 
 void destroyJstr(jstr str)

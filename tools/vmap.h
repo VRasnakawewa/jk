@@ -15,13 +15,11 @@ static void visualizeMap(struct map *map)
         printf("{");
         while (e) {
             if (e->next)
-                printf("%s -> ", (JSTR_VALID(e->key)) ? "[jstr]" : e->key);
+                printf("%s ->", JSTR(e->key));
             else
-                l = e;
+                printf("%s", JSTR(e->key));
             e = e->next;
         }
-        if (l)
-            printf("%s", (JSTR_VALID(e->key)) ? "[jstr]" : e->key);
         printf("}\n");
     }
 }

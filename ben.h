@@ -14,6 +14,15 @@
 #define BEN_TYPE_LIST 2
 #define BEN_TYPE_MAP 3
 
+#define benIsInt(node) \
+    (((struct benNode *)(node))->type == BEN_TYPE_INT)
+#define benIsJstr(node) \
+    (((struct benNode *)(node))->type == BEN_TYPE_JSTR)
+#define benIsList(node) \
+    (((struct benNode *)(node))->type == BEN_TYPE_LIST)
+#define benIsMap(node) \
+    (((struct benNode *)(node))->type == BEN_TYPE_MAP)
+
 #define benAsInt(node) \
     (((struct benNode *)(node))->value.i)
 #define benAsJstr(node) \
@@ -33,7 +42,12 @@ struct benNode {
     int type;
 };
 
-int benDecode(struct benNode **node, unsigned char *data, u64 len);
+int benEncodeI64(jstr *data, i64 num);
+int benEncodeJstr(jstr *data, jstr str);
+int benEncodeList(jstr *data, struct list *list);
+int benEncodeMap(jstr *data, struct map *map);
+int benDecode(struct benNode **node, jstr len);
+int benEncode(jstr *data, struct benNode *node);
 void benDestroyBenNode(void *node);
 
 #endif

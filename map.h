@@ -18,6 +18,12 @@ struct map {
     struct mapEntry **table;
 };
 
+struct mapIterator {
+    u64 pos;
+    struct mapEntry *cur;
+    struct mapEntry **table;
+};
+
 #define MAP_ALLOC_FAILED(map) (!(map) || (!(map)->table))
 
 struct map *mapNew(u64 cap,
@@ -26,5 +32,14 @@ struct map *mapNew(u64 cap,
 void mapDestroy(struct map *map);
 void *mapPut(struct map *map, char *key, void *val);
 void *mapGet(struct map *map, char *key);
+
+static inline void mapIteratorInit(struct mapIterator *iter, struct map *map)
+{
+    iter->cur = NULL;
+    iter->pos = map->cap;
+    iter->table = map->table;
+}
+struct mapEntry *mapIteratorNext(struct mapIterator *iter);
+
 
 #endif

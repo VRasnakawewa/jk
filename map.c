@@ -156,3 +156,15 @@ void *mapGet(struct map *map, char *key)
     return NULL;
 }
 
+struct mapEntry *mapIteratorNext(struct mapIterator *it)
+{
+    while (!it->cur && it->pos > 0)
+        it->cur = it->table[--it->pos];
+
+    struct mapEntry *e = it->cur;
+    if (it->cur)
+        it->cur = it->cur->next;
+
+    return e;
+}
+
