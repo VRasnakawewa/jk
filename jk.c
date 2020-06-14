@@ -111,14 +111,14 @@ void jkSendTrackerRequest(struct evLoop *loop, struct jk *jk)
 
     char *port = JK_CONFIG_CLIENT_PORT;
 
-    char uploaded[snprintf(NULL,0,"%lu",jk->uploaded) + 1];
-    snprintf(uploaded, sizeof(uploaded), "%lu", jk->uploaded);
+    char uploaded[u64strlen(jk->uploaded)+1];
+    u64str(uploaded, jk->uploaded);
 
-    char downloaded[snprintf(NULL,0,"%lu",jk->downloaded) + 1];
-    snprintf(downloaded, sizeof(downloaded), "%lu", jk->downloaded);
+    char downloaded[u64strlen(jk->downloaded)+1];
+    u64str(downloaded, jk->downloaded);
 
-    char left[snprintf(NULL,0,"%lu",jk->total-jk->downloaded) + 1];
-    snprintf(left, sizeof(left), "%lu", jk->total-jk->downloaded);
+    char left[u64strlen(jk->total - jk->downloaded)+1];
+    u64str(left, jk->total - jk->downloaded);
 
     char *compact = JK_CONFIG_COMPACT;
 
