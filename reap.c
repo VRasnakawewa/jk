@@ -59,7 +59,7 @@ static char *buildQueryParams(char **s)
     while (s[i]) {
         char *key = s[i++];
         char *val = s[i++];
-        char *fmt = (i == 0)
+        char *fmt = (i == 2)
             ? "?%s=%s"  /* ?key=val */
             : "&%s=%s"; /* &key=val */
         len += snprintf(q+len,
@@ -69,8 +69,11 @@ static char *buildQueryParams(char **s)
     return q;
 }
 
-typedef void onSuccessFn(struct evLoop *loop, char *response);
-typedef void onErrorFn(struct evLoop *loop, const char *error);
+typedef void onResponseFn(struct evLoop *loop,
+                          void *callerData,
+                          char *response,
+                          int error,
+                          const char *errMsg);
 
 struct reapOpt {
     char *reqStr;
@@ -79,16 +82,16 @@ struct reapOpt {
     char *resStr;
     size_t resStrLen;
     size_t resStrCap;
-    onSuccessFn *onSuccess;
-    onErrorFn *onError;
+    void *callerData;
+    onResponseFn *onResponse;
 };
 
 #define HTTP_GET_REQUEST_FMT "GET %s%s HTTP/1.1\r\n%s\r\n"
-struct reapOpt *newReapOpt(const char *path,
+struct reapOpt *newReapOpt(void *callerData,
+                           const char *path,
                            char **headers,
                            char **params,
-                           onSuccessFn *onSuccess,
-                           onErrorFn *onError)
+                           onResponseFn *onResponse)
 {
     if (!path)
         path = "/";
@@ -101,8 +104,8 @@ struct reapOpt *newReapOpt(const char *path,
 
     opt = malloc(sizeof(*opt));
     if (!opt) return NULL;
-    opt->onSuccess = onSuccess;
-    opt->onError = onError;
+    opt->callerData = callerData;
+    opt->onResponse = onResponse;
     opt->resStrLen = 0;
     opt->resStrCap = 8192;
     opt->resStr = malloc(opt->resStrCap);
@@ -165,8 +168,8 @@ static void onRecvReady(struct evLoop *loop,
         opt->resStr[opt->resStrLen] = '\0';
 
         char *res = opt->resStr;
-        onSuccessFn *success = opt->onSuccess;
-        success(loop, res);
+        onResponseFn *onResponse = opt->onResponse;
+        onResponse(loop, opt->callerData, res, 0, NULL);
 
         close(sockfd);
         removeFileEventEvLoop(loop, sockfd, mask);
@@ -187,7 +190,7 @@ static void onRecvReady(struct evLoop *loop,
 error:
     removeFileEventEvLoop(loop, sockfd, mask);
     close(sockfd);
-    opt->onError(loop, strerror(errno));
+    opt->onResponse(loop, opt->callerData, NULL, 1, strerror(errno));
     destroyReapOpt(opt,1);
 }
 
@@ -219,7 +222,7 @@ static void onSendReady(struct evLoop *loop,
 error:
     removeFileEventEvLoop(loop, sockfd, mask);
     close(sockfd);
-    opt->onError(loop, strerror(errno));
+    opt->onResponse(loop, opt->callerData, NULL, 1, strerror(errno));
     destroyReapOpt(opt,1);
 }
 
@@ -241,17 +244,18 @@ static void onConnect(struct evLoop *loop,
 error:
     removeFileEventEvLoop(loop, sockfd, mask);
     close(sockfd);
-    opt->onError(loop, strerror(errno));
+    opt->onResponse(loop, opt->callerData, NULL, 1, strerror(errno));
     destroyReapOpt(opt,1);
 }
 
 void reap(struct evLoop *loop,
+          void *callerData,
           const char *hostname,
+          const char *port,
           const char *path,
           char **headers,
           char **params,
-          onSuccessFn *onSuccess,
-          onErrorFn *onError)
+          onResponseFn *onResponse)
 {
     if (loop->stop) return;
 
@@ -264,21 +268,23 @@ void reap(struct evLoop *loop,
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    r = getaddrinfo(hostname, "80", &hints, &info);
+    r = getaddrinfo(hostname, (port) ? port : "80", &hints, &info);
     if (r) {
-        onError(loop, gai_strerror(r));
+        onResponse(loop, callerData, NULL, 1, gai_strerror(r));
         return;
     }
 
     struct reapOpt *opt;
 
     opt = newReapOpt(
+            callerData,
             path,
             headers,
             params,
-            onSuccess,
-            onError);
+            onResponse);
     if (!opt) goto error;
+
+    printf("%s\n",opt->reqStr);
 
     struct addrinfo *p;
     for (p = info; p; p = p->ai_next) {
@@ -310,7 +316,7 @@ void reap(struct evLoop *loop,
 error:
     if (info) freeaddrinfo(info);
     destroyReapOpt(opt,1);
-    onError(loop, !err ? strerror(errno) : err);
+    onResponse(loop, callerData, NULL, 1, !err ? strerror(errno) : err);
     return;
 }
 

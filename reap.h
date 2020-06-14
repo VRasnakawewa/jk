@@ -4,11 +4,16 @@
 #include "ev.h"
 
 void reap(struct evLoop *loop,
+          void *callerData,
           const char *hostname,
+          const char *port,
           const char *path,
           char **headers,
           char **params,
-          void (*onSuccess)(struct evLoop *loop, char *response),
-          void (*onError)(struct evLoop *loop, char *error));
+          void onResponseFn(struct evLoop *loop,
+                            void *callerData,
+                            char *response,
+                            int error,
+                            const char *errMsg));
 
 #endif

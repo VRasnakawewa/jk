@@ -4,8 +4,8 @@ LIBS=-lssl -lcrypto
 
 all: jk
 
-jk: jk.o ben.o reap.o ev.o map.o list.o jstr.o urlencode.o util.o common.h stack.h
-	$(CC) $(CFLAG) -o jk jk.o ben.o reap.o ev.o map.o list.o jstr.o urlencode.o util.o $(LIBS)
+jk: jk.o ben.o reap.o ev.o map.o list.o jstr.o urlencode.o util.o info.o common.h stack.h
+	$(CC) $(CFLAG) -o jk jk.o ben.o reap.o ev.o map.o list.o jstr.o urlencode.o util.o info.o $(LIBS)
 
 jstr.o: jstr.h
 list.o: list.h
@@ -15,6 +15,7 @@ reap.o: reap.h
 ben.o: ben.h
 urlencode.o: urlencode.h
 util.o: util.h
+info.o: info.h
 
 clean:
 	rm -f jk *.o

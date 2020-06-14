@@ -105,3 +105,8 @@ void runEvLoop(struct evLoop *loop)
         processEventsEvLoop(loop);
 }
 
+void stopEvLoop(struct evLoop *loop)
+{
+    loop->stop = 1;
+}
+

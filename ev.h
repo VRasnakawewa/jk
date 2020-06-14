@@ -38,7 +38,6 @@ struct evLoop {
 #define EV_EXCEPTION 4
 
 void initEvLoop(struct evLoop *loop);
-void destroyEvLoop(struct evLoop *loop);
 int addFileEventEvLoop(struct evLoop *loop,
         int fd, int mask, procFileEventFn *proc, void *data);
 void removeFileEventEvLoop(struct evLoop *loop, int fd, int mask);
@@ -47,5 +46,6 @@ u64 addTimeEventEvLoop(struct evLoop *loop,
 int removeTimeEventEvLoop(struct evLoop *loop, u64 id);
 int processEventsEvLoop(struct evLoop *loop);
 void runEvLoop(struct evLoop *loop);
+void stopEvLoop(struct evLoop *loop);
 
 #endif

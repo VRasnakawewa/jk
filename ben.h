@@ -6,16 +6,16 @@
 #include "list.h"
 #include "map.h"
 
-#define BEN_OK 0
-#define BEN_ERR 1
+#define BEN_OK 1
+#define BEN_ERR 0
 
-#define BEN_TYPE_INT 0 
+#define BEN_TYPE_I64 0 
 #define BEN_TYPE_JSTR 1
 #define BEN_TYPE_LIST 2
 #define BEN_TYPE_MAP 3
 
 #define benIsInt(node) \
-    (((struct benNode *)(node))->type == BEN_TYPE_INT)
+    (((struct benNode *)(node))->type == BEN_TYPE_I64)
 #define benIsJstr(node) \
     (((struct benNode *)(node))->type == BEN_TYPE_JSTR)
 #define benIsList(node) \
@@ -23,7 +23,7 @@
 #define benIsMap(node) \
     (((struct benNode *)(node))->type == BEN_TYPE_MAP)
 
-#define benAsInt(node) \
+#define benAsI64(node) \
     (((struct benNode *)(node))->value.i)
 #define benAsJstr(node) \
     (((struct benNode *)(node))->value.s)

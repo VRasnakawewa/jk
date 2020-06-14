@@ -97,8 +97,8 @@ int benEncodeMap(jstr *data, struct map *map)
 int benEncode(jstr *data, struct benNode *node)
 {
     switch (node->type) {
-    case BEN_TYPE_INT:
-        return benEncodeI64(data, benAsInt(node));
+    case BEN_TYPE_I64:
+        return benEncodeI64(data, benAsI64(node));
     case BEN_TYPE_JSTR:
         return benEncodeJstr(data, benAsJstr(node));
     case BEN_TYPE_LIST:
@@ -258,7 +258,7 @@ static int bufferDecodeNext(struct buffer *buf, struct benNode *node)
         return BEN_OK;
     }
     case 'i':
-        node->type = BEN_TYPE_INT;
+        node->type = BEN_TYPE_I64;
         return bufferDecodeNextI64(buf, &node->value.i);
     default:
         node->type = BEN_TYPE_JSTR;
@@ -292,7 +292,7 @@ void benDestroyBenNode(void *node)
 
     struct benNode *n = (struct benNode *)node;
     switch (n->type) {
-    case BEN_TYPE_INT:
+    case BEN_TYPE_I64:
         break;
     case BEN_TYPE_JSTR:
         if (n->value.s) {

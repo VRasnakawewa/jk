@@ -1,6 +1,8 @@
 #ifndef JSTR_H
 #define JSTR_H
 
+#include <stdio.h>
+
 typedef char * jstr;
 
 #define JSTR_INVALID_BYTE 0xC0
