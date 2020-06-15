@@ -7,7 +7,7 @@
 
 #include "jk.h"
 
-void jkLogError(const char *fmt, ...)
+void jkLog(int type, const char *fmt, ...)
 {
     va_list ap;
     char msg[1024];
@@ -15,8 +15,15 @@ void jkLogError(const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(msg, sizeof(msg), fmt, ap);
     va_end(ap);
-
-    fprintf(stderr, "error: %s\n", msg);
+    
+    switch (type) {
+    case LT_ERROR:
+        fprintf(stderr, "ERROR: %s\n", msg); break;
+    case LT_WARNING:
+        printf("WARNING: %s\n", msg); break;
+    default:
+        printf("INFO: %s\n", msg);
+    }
 }
 
 struct jk *jkNew(unsigned char *hash, char *trackerUrl, struct map *meta)
@@ -77,7 +84,7 @@ static void nbOnTrackerResponse(struct evLoop *loop,
     struct jk *jk = (struct jk *)callerData;
 
     if (error) {
-        jkLogError(errMsg);
+        jkLog(LT_INFO, errMsg);
         if (response) free(response);
         stopEvLoop(loop);
         return;
@@ -177,16 +184,16 @@ int main(int argc, char **argv)
 
     metaRaw = readFile(filename);
     if (!metaRaw) {
-        jkLogError(strerror(errno));
+        jkLog(LT_ERROR, strerror(errno));
         return 1;
     }
     if (benDecode(&meta, JSTR(metaRaw), lenJstr(metaRaw)) != BEN_OK) {
-        jkLogError((errno) ? strerror(errno) : "Couldn't decode the meta file");
+        jkLog(LT_ERROR, (errno) ? strerror(errno) : "Couldn't decode the meta file");
         destroyJstr(metaRaw);
         return 1;
     }
     if (!benIsMap(&meta) || !verifyMetaStructure(benAsMap(&meta))) {
-        jkLogError("Invalid or corrupted meta file");
+        jkLog(LT_ERROR, "Invalid or corrupted meta file");
         destroyJstr(metaRaw);
         if (benIsMap(&meta)) mapDestroy(benAsMap(&meta));
         return 1;
@@ -196,7 +203,7 @@ int main(int argc, char **argv)
     destroyJstr(metaRaw);
     jk = jkNew(infoHash, JSTR(announce), benAsMap(&meta));
     if (!jk) {
-        jkLogError(strerror(errno));
+        jkLog(LT_ERROR, strerror(errno));
         mapDestroy(benAsMap(&meta));
         return 1;
     }
