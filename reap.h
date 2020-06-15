@@ -13,6 +13,7 @@ void reap(struct evLoop *loop,
           void onResponseFn(struct evLoop *loop,
                             void *callerData,
                             char *response,
+                            size_t responseLen,
                             int error,
                             const char *errMsg));
 

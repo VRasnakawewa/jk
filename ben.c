@@ -122,6 +122,7 @@ struct buffer {
 };
 
 static int bufferDecodeNext(struct buffer *buf, struct benNode *node);
+static void benDestroyBenNode(void *node);
 
 static int bufferFind(struct buffer *buf, unsigned char c, u64 *index)
 {
@@ -270,23 +271,20 @@ static int bufferDecodeNext(struct buffer *buf, struct benNode *node)
     }
 }
 
-int benDecode(struct benNode **node, jstr data)
+int benDecode(struct benNode *node, unsigned char *data, u64 dataLen)
 {
     int r;
     struct buffer buf;
 
     buf.pos = 0;
-    buf.len = lenJstr(data);
-    buf.data = JSTR(data);
+    buf.len = dataLen;
+    buf.data = data;
 
-    *node = malloc(sizeof(**node));
-    if (!(*node)) return BEN_ERR;
-    r = bufferDecodeNext(&buf, *node);
-    if (r != BEN_OK) benDestroyBenNode(*node);
+    r = bufferDecodeNext(&buf, node);
     return r;
 }
 
-void benDestroyBenNode(void *node)
+static void benDestroyBenNode(void *node)
 {
     if (!node) return;
 

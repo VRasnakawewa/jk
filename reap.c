@@ -13,6 +13,24 @@
 static char *defualtHttpHeaders[] = {NULL};
 static char *defaultQueryParams[] = {NULL};
 
+typedef void onResponseFn(struct evLoop *loop,
+                          void *callerData,
+                          char *response,
+                          size_t responseLen,
+                          int error,
+                          const char *errMsg);
+
+struct reapOpt {
+    char *reqStr;
+    size_t reqStrLen;
+    size_t reqStrPos;
+    char *resStr;
+    size_t resStrLen;
+    size_t resStrCap;
+    void *callerData;
+    onResponseFn *onResponse;
+};
+
 static size_t lenKeyValPairs(char **s)
 {
     size_t len;
@@ -85,23 +103,6 @@ static char *buildQueryParams(char **s)
     q[len] = '\0';
     return q;
 }
-
-typedef void onResponseFn(struct evLoop *loop,
-                          void *callerData,
-                          char *response,
-                          int error,
-                          const char *errMsg);
-
-struct reapOpt {
-    char *reqStr;
-    size_t reqStrLen;
-    size_t reqStrPos;
-    char *resStr;
-    size_t resStrLen;
-    size_t resStrCap;
-    void *callerData;
-    onResponseFn *onResponse;
-};
 
 #define HTTP_GET_REQUEST_FMT "GET %s%s HTTP/1.1\r\n%s\r\n"
 struct reapOpt *newReapOpt(void *callerData,
@@ -204,7 +205,7 @@ static void onRecvReady(struct evLoop *loop,
 
         char *res = opt->resStr;
         onResponseFn *onResponse = opt->onResponse;
-        onResponse(loop, opt->callerData, res, 0, NULL);
+        onResponse(loop, opt->callerData, res, opt->resStrLen, 0, NULL);
 
         close(sockfd);
         removeFileEventEvLoop(loop, sockfd, mask);
@@ -225,7 +226,7 @@ static void onRecvReady(struct evLoop *loop,
 error:
     removeFileEventEvLoop(loop, sockfd, mask);
     close(sockfd);
-    opt->onResponse(loop, opt->callerData, NULL, 1, strerror(errno));
+    opt->onResponse(loop, opt->callerData, NULL, 0, 1, strerror(errno));
     destroyReapOpt(opt,1);
 }
 
@@ -257,7 +258,7 @@ static void onSendReady(struct evLoop *loop,
 error:
     removeFileEventEvLoop(loop, sockfd, mask);
     close(sockfd);
-    opt->onResponse(loop, opt->callerData, NULL, 1, strerror(errno));
+    opt->onResponse(loop, opt->callerData, NULL, 0, 1, strerror(errno));
     destroyReapOpt(opt,1);
 }
 
@@ -279,7 +280,7 @@ static void onConnect(struct evLoop *loop,
 error:
     removeFileEventEvLoop(loop, sockfd, mask);
     close(sockfd);
-    opt->onResponse(loop, opt->callerData, NULL, 1, strerror(errno));
+    opt->onResponse(loop, opt->callerData, NULL, 0, 1, strerror(errno));
     destroyReapOpt(opt,1);
 }
 
@@ -305,7 +306,7 @@ void reap(struct evLoop *loop,
 
     r = getaddrinfo(hostname, (port) ? port : "80", &hints, &info);
     if (r) {
-        onResponse(loop, callerData, NULL, 1, gai_strerror(r));
+        onResponse(loop, callerData, NULL, 0, 1, gai_strerror(r));
         return;
     }
 
@@ -356,7 +357,7 @@ void reap(struct evLoop *loop,
 error:
     if (info) freeaddrinfo(info);
     destroyReapOpt(opt,1);
-    onResponse(loop, callerData, NULL, 1, !err ? strerror(errno) : err);
+    onResponse(loop, callerData, NULL, 0, 1, !err ? strerror(errno) : err);
     return;
 }
 
