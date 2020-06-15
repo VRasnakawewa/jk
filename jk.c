@@ -99,6 +99,8 @@ void jkOnTrackerResponse(struct evLoop *loop,
         return;
     }
     printf("%s\n", response);
+    free(response);
+    stopEvLoop(loop);
 }
 
 void jkSendTrackerRequest(struct evLoop *loop, struct jk *jk)
@@ -127,20 +129,13 @@ void jkSendTrackerRequest(struct evLoop *loop, struct jk *jk)
     char trackerHostname[strlen(jk->trackerUrl) + 1];
     strncpy(trackerHostname, jk->trackerUrl, sizeof(trackerHostname));
 
-    char *p;
-    strtok_r(trackerHostname, "/", &p);
-    char trackerPath[strlen(p)+1+1];
-    snprintf(trackerPath, sizeof(trackerPath), "/%s", p);
+    char *trackerPath;
+    strtok_r(trackerHostname, "/", &trackerPath);
 
     char *trackerPort;
     strtok_r(trackerHostname, ":", &trackerPort);
 
-    char trackerHost[strlen(trackerHostname) + strlen(trackerPort) + 1 + 1];
-    snprintf(trackerHost, sizeof(trackerHost),
-        "%s:%s", trackerHostname, trackerPort);
-
     char *headers[] = {
-        "Host",trackerHost,
         "Connection","close",
         NULL
     };

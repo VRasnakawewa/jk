@@ -5,9 +5,9 @@
 
 void reap(struct evLoop *loop,
           void *callerData,
-          const char *hostname,
-          const char *port,
-          const char *path,
+          char *hostname,
+          char *port,
+          char *path,
           char **headers,
           char **params,
           void onResponseFn(struct evLoop *loop,

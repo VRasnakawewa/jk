@@ -13,6 +13,23 @@
 static char *defualtHttpHeaders[] = {NULL};
 static char *defaultQueryParams[] = {NULL};
 
+static size_t lenKeyValPairs(char **s)
+{
+    size_t len;
+    for (len = 0; s[len]; len++);
+    return len;
+}
+
+static inline size_t lenHeaders(char **h)
+{
+    return lenKeyValPairs(h);
+}
+
+static inline size_t lenParams(char **p)
+{
+    return lenKeyValPairs(p);
+}
+
 static char *buildHttpHeaders(char **s)
 {
     size_t i = 0, cap = 1;   /* '\0' */
@@ -88,7 +105,8 @@ struct reapOpt {
 
 #define HTTP_GET_REQUEST_FMT "GET %s%s HTTP/1.1\r\n%s\r\n"
 struct reapOpt *newReapOpt(void *callerData,
-                           const char *path,
+                           char *host,
+                           char *path,
                            char **headers,
                            char **params,
                            onResponseFn *onResponse)
@@ -99,6 +117,23 @@ struct reapOpt *newReapOpt(void *callerData,
         headers = defualtHttpHeaders;
     if (!params)
         params = defaultQueryParams;
+
+    /* Add missing '/' to the path */
+    char pathCopy[1 + strlen(path) + 1];
+    if (*path != '/') {
+        snprintf(pathCopy, sizeof(pathCopy), "/%s", path);
+        path = pathCopy;
+    }
+
+    /* Add missing 'Host' header to the headers */
+    size_t headersLen = lenHeaders(headers);
+    char *headersCopy[2 + headersLen + 1];
+    headersCopy[0] = "Host";
+    headersCopy[1] = host;
+    for (size_t i = 0; i < headersLen; i++)
+        headersCopy[i+2] = headers[i];
+    headersCopy[2 + headersLen] = NULL;
+    headers = headersCopy;
     
     struct reapOpt *opt; 
 
@@ -250,9 +285,9 @@ error:
 
 void reap(struct evLoop *loop,
           void *callerData,
-          const char *hostname,
-          const char *port,
-          const char *path,
+          char *hostname,
+          char *port,
+          char *path,
           char **headers,
           char **params,
           onResponseFn *onResponse)
@@ -274,17 +309,22 @@ void reap(struct evLoop *loop,
         return;
     }
 
+    char host[strlen(hostname) + strlen(port) + 1 + 1];
+    if (port)
+        snprintf(host, sizeof(host), "%s:%s", hostname, port);
+    else
+        snprintf(host, sizeof(host), "%s", hostname);
+
     struct reapOpt *opt;
 
     opt = newReapOpt(
             callerData,
+            host,
             path,
             headers,
             params,
             onResponse);
     if (!opt) goto error;
-
-    printf("%s\n",opt->reqStr);
 
     struct addrinfo *p;
     for (p = info; p; p = p->ai_next) {
