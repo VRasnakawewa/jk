@@ -19,6 +19,11 @@ static struct mapEntry *newMapEntry(char *key,
     return e;
 }
 
+static void destroyKey(char *key)
+{
+    if (JSTR_VALID(key)) destroyJstr(key); else free(key);
+}
+
 struct map *mapNew(u64 cap,
                    float loadFactor,
                    void (*destroyValFn)(void *val))
@@ -49,7 +54,7 @@ void mapDestroy(struct map *map)
         struct mapEntry *e = map->table[i];
         while (e) {
             struct mapEntry *trash = e;
-            destroyJstr(trash->key);
+            destroyKey(trash->key);
             if (map->destroyValFn)
                 map->destroyValFn(trash->val);
             e = e->next;
@@ -117,7 +122,7 @@ void *mapPut(struct map *map, char *key, void *val)
         if (!cmpJstr(key, e->key)) {
             void *oldval = e->val;
             e->val = val;
-            destroyJstr(key);
+            destroyKey(key);
             return oldval;
         }
         e = e->next;
@@ -126,7 +131,7 @@ void *mapPut(struct map *map, char *key, void *val)
     if (map->count >= map->threshold) {
         _rehashMap(map);
         if (MAP_ALLOC_FAILED(map)) {
-            destroyJstr(key);
+            destroyKey(key);
             return NULL;
         }
     }
@@ -134,7 +139,7 @@ void *mapPut(struct map *map, char *key, void *val)
     struct mapEntry *new = newMapEntry(key, val, map->table[index]);
     if (!new) {
         mapDestroy(map);
-        destroyJstr(key);
+        destroyKey(key);
         map->table = NULL;
         return NULL;
     }

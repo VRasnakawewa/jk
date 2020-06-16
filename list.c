@@ -51,8 +51,10 @@ void listAdd(struct list *list, void *val)
 {
     if (list->len >= list->cap) {
         _growList(list);
-        if (LIST_ALLOC_FAILED(list))
+        if (LIST_ALLOC_FAILED(list)) {
+            listDestroy(list);
             return;
+        }
     }
     list->values[list->len++] = val;
 }

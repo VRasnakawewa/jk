@@ -10,6 +10,7 @@
 #include "info.h"
 #include "ev.h"
 #include "reap.h"
+#include "client.h"
 
 #define JK_CONFIG_COMPACT "1"
 #define JK_CONFIG_CLIENT_PORT "6882"
