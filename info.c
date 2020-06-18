@@ -7,6 +7,11 @@ int infoVerify(struct map *info)
 
 i64 infoGetTotalBytes(struct map *info)
 {
+    /* single file mode */
+    if (!mapHas(info, "files"))
+        return benAsI64(mapGet(info, "length"));
+
+    /* multi file mode */
     struct list *files = benAsList(mapGet(info, "files"));
 
     u64 length = 0;

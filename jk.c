@@ -49,7 +49,7 @@ struct jk *jkNew(unsigned char *hash, char *trackerUrl, struct map *meta)
     jk->event = JK_EVENT_STARTED;
     jk->uploaded = 0;
     jk->downloaded = 0;
-    jk->total = 0;//infoGetTotalBytes(benAsMap(mapGet(meta, "info")));
+    jk->total = infoGetTotalBytes(benAsMap(mapGet(meta, "info")));
     jk->seeders = 0; 
     jk->leechers = 0;
     jk->trackerProto = trackerUrl;
