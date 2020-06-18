@@ -13,6 +13,8 @@
 
 void jkLog(int type, const char *fmt, ...)
 {
+    if (type == LT_DEBUG && !JK_CONFIG_DEBUG) return;
+
     va_list ap;
     char msg[1024];
     
@@ -22,11 +24,17 @@ void jkLog(int type, const char *fmt, ...)
     
     switch (type) {
     case LT_ERROR:
-        fprintf(stderr, "ERROR: %s\n", msg); break;
+        fprintf(stderr, "ERROR: %s\n", msg);
+        break;
     case LT_WARNING:
-        printf("WARNING: %s\n", msg); break;
-    default:
+        printf("WARNING: %s\n", msg);
+        break;
+    case LT_INFO:
         printf("INFO: %s\n", msg);
+        break;
+    default:
+        printf("DEBUG: %s\n", msg);
+        break;
     }
 }
 
@@ -41,7 +49,7 @@ struct jk *jkNew(unsigned char *hash, char *trackerUrl, struct map *meta)
     jk->event = JK_EVENT_STARTED;
     jk->uploaded = 0;
     jk->downloaded = 0;
-    jk->total = infoGetTotalBytes(benAsMap(mapGet(meta, "info")));
+    jk->total = 0;//infoGetTotalBytes(benAsMap(mapGet(meta, "info")));
     jk->seeders = 0; 
     jk->leechers = 0;
     jk->trackerProto = trackerUrl;
@@ -51,55 +59,56 @@ struct jk *jkNew(unsigned char *hash, char *trackerUrl, struct map *meta)
     jk->trackerId = NULL;
     jk->trackerIntervalSec = UINT64_MAX;
     jk->trackerResponse = NULL;
-    jk->peers = NULL;
-    jk->clients = NULL;
+    jk->workersInactive = NULL;
+    jk->workers = NULL;
     jk->meta = meta;
     return jk;
 }
 
 void jkDestroy(struct jk *jk)
 {
-    listDestroy(jk->peers);
     mapDestroy(jk->trackerResponse);
-    mapDestroy(jk->clients);
+    mapDestroy(jk->workersInactive);
+    mapDestroy(jk->workers);
     mapDestroy(jk->meta);
     free(jk);
 }
 
 static struct list *unmarshalPeers(jstr peers, int family)
 {
-    struct list *list;
-    u64 peerSize = (AF_INET6) ? 18 : 6;
+    u64 peersize = (family == AF_INET6) ? 18 : 6;
 
-    list = listNew(lenJstr(peers)/peerSize, free);
+    if (lenJstr(peers) % peersize != 0) {
+        jkLog(LT_WARNING, "Received malformed peers");
+        return NULL;
+    }
+
+    struct list *list = listNew(lenJstr(peers) / peersize, free);
     if (!list) return NULL;
 
-    for (u64 i = 0; i < lenJstr(peers); i += peerSize) {
-        unsigned char ipvX[peerSize-2];
+    for (u64 i = 0; i < lenJstr(peers); i += peersize) {
+        unsigned char ipvx[peersize-2];
         unsigned char port[2];
-        memcpy(ipvX, peers + i, peerSize-2);
-        memcpy(port, peers + i + peerSize-2, 2);
+        memcpy(ipvx, JSTR(peers) + i, peersize-2);
+        memcpy(port, JSTR(peers) + i + peersize-2, 2);
 
-        char ipvXstr[INET6_ADDRSTRLEN];
-        inet_ntop(family, ipvX, ipvXstr, sizeof(ipvXstr));
-        /* todo: Verify ip address (check inet_ntop result) */
+        char ipvxstr[INET6_ADDRSTRLEN];
+        inet_ntop(family, ipvx, ipvxstr, sizeof(ipvxstr));
         char portstr[5+1];
-        snprintf(portstr, sizeof(portstr),
-            "%u", ntohs((port[0]<<8)+port[1]));
-        /* todo: Verify port number (check range check) */
+        snprintf(portstr, sizeof(portstr), "%d", ntohs((*(int *)port)));
 
-        u64 clientIdLen = 
-            strlen(ipvXstr) +
+        u64 workerIdLen = 
+            strlen(ipvxstr) +
             strlen(portstr) +
             1 + 
             1;
-        char *clientId = malloc(clientIdLen);
-        if (!clientId) {
+        char *workerId = malloc(workerIdLen);
+        if (!workerId) {
             listDestroy(list);
             return NULL; 
         }
-        snprintf(clientId, clientIdLen, "%s:%s", ipvXstr, portstr);
-        listAdd(list, clientId);
+        snprintf(workerId, workerIdLen, "%s:%s", ipvxstr, portstr);
+        listAdd(list, workerId);
         if (LIST_ALLOC_FAILED(list))
             return NULL;
     }
@@ -112,70 +121,133 @@ static int verifyTrackerResponse(struct map *res)
     return 1;
 }
 
-#include "tools/vmap.h"
+static int createWorkers(struct jk *jk, struct list *peers)
+{
+    for (u64 i = mapSize(jk->workers);
+        i < JK_CONFIG_MAX_ACTIVE_PEERS && !listIsEmpty(peers) ; i++)
+    {
+        unsigned char *id = listPop(peers);
+        if (!mapHas(jk->workers, id)) { 
+            struct worker *w = workerNew(id, jk);
+            if (!w) return 0;
+            mapPut(jk->workers, id, w);
+            if (MAP_ALLOC_FAILED(jk->workers)) {
+                workerDestroy(w);
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+static int createInactiveWorkers(struct jk *jk, struct list *peers)
+{
+    for (u64 i = mapSize(jk->workersInactive); 
+        i < JK_CONFIG_MAX_INACTIVE_PEERS && !listIsEmpty(peers); i++)
+    {
+        unsigned char *id = listPop(peers);
+        if (!mapHas(jk->workersInactive, id)) {
+            mapPut(jk->workersInactive, id, NULL);
+            if (MAP_ALLOC_FAILED(jk->workersInactive))
+                return 0;
+        }
+    }
+    return 1;
+}
+
 static void nbOnTrackerResponse(struct evLoop *loop,
                                 void *callerData,
                                 char *response,
                                 size_t responseLen,
-                                int error,
-                                const char *errMsg)
+                                int errcode,
+                                reapStrerrorFn *reapStrerror)
 {
     struct jk *jk = (struct jk *)callerData;
 
-    if (error) {
-        jkLog(LT_INFO, errMsg);
-        if (response) free(response);
-        stopEvLoop(loop);
+    if (errcode == EAI_AGAIN ||
+        errcode == EAGAIN ||
+        errcode == ENETUNREACH ||
+        errcode == ETIMEDOUT) {
+        jkLog(LT_DEBUG, "Tracker request failed. Trying again");
+        return; /* retry */
+    }
+    if (errcode) {
+        jkLog(LT_ERROR, "Tracker request failed: %s", reapStrerror(errcode));
+        stopEvLoop(loop); /* cannot recover */
         return;
     }
-    char *body;
+        
     if (!strstr(response, "HTTP/1.1 200 OK")) {
-        jkLog(LT_ERROR, "Tracker request failed");
-        goto error;
+        jkLog(LT_DEBUG, "Tracker request failed. Trying again");
+        return; /* retry */
     }
-    body = strstr(response, "\r\n\r\n");
+
+    char *body = strstr(response, "\r\n\r\n");
     if (!body) {
-        jkLog(LT_ERROR, "Tracker request failed");
-        goto error;
+        jkLog(LT_DEBUG, "Tracker request failed. Trying again");
+        return; /* retry */
     }
     body += 4;
 
     struct benNode res;
     if (benDecode(&res, body, responseLen - (body - response)) != BEN_OK) {
-        jkLog(LT_ERROR, "Invalid tracker response");
-        goto error;
+        jkLog(LT_DEBUG, "Invalid bencode format in tracker response. Trying again");
+        return; /* retry */
     }
     if (!benIsMap(&res) || !verifyTrackerResponse(benAsMap(&res))) {
-        jkLog(LT_ERROR, "Invalid tracker response");
+        jkLog(LT_DEBUG, "Invalid bencode format in tracker response. Trying again");
         if (benIsMap(&res)) mapDestroy(benAsMap(&res));
-        goto error;
+        return; /* retry */
     }
+    mapDestroy(jk->trackerResponse); /* destroy existing tracker response */
     jk->trackerResponse = benAsMap(&res);
-    struct benNode *peersIpv4 = mapGet(benAsMap(&res), "peers");
-    struct benNode *peersIpv6 = mapGet(benAsMap(&res), "peers6");
 
-    /* todo: Either lists should be merged or maintain two lists */
-    struct list *peers;
-    if (peersIpv4)
-        peers = unmarshalPeers(benAsJstr(peersIpv4), AF_INET);
-    if (peersIpv6)
-        peers = unmarshalPeers(benAsJstr(peersIpv6), AF_INET6);
-
-    jk->clients = mapNew(peers->len, 1.0, clientDestroy);
-    
-    for (u64 i = 0; i < peers->len; i++) {
-        unsigned char *id = peers->values[i];
-        struct client *c = clientNew(id, jk);
-        mapPut(jk->clients, id, c);
+    struct benNode *peers4ben = mapGet(benAsMap(&res), "peers");
+    struct benNode *peers6ben = mapGet(benAsMap(&res), "peers6");
+    struct list *peers4;
+    struct list *peers6;
+    if (peers4ben)
+        peers4 = unmarshalPeers(benAsJstr(peers4ben), AF_INET);
+    if (peers6ben)
+        peers6 = unmarshalPeers(benAsJstr(peers6ben), AF_INET6);
+    if (!peers4 || !peers6) {
+        jkLog(LT_ERROR, strerror(errno));
+        stopEvLoop(loop);
+        return;
     }
-    visualizeMap(jk->clients);
 
-    /* Let the client map delete it's keys */
-    peers->destroyValFn = NULL;
-    listDestroy(peers);
-error:
-    free(response);
+    if (!jk->workersInactive) {
+        jk->workersInactive = mapNew(JK_CONFIG_MAX_INACTIVE_PEERS, 1.0, NULL);
+        if (!jk->workersInactive) goto enomem;
+    }
+
+    if (!jk->workers) {
+        jk->workers = mapNew(JK_CONFIG_MAX_ACTIVE_PEERS, 1.0, workerDestroy);
+        if (!jk->workers) goto enomem;
+    }
+
+    if (!createWorkers(jk, peers4) || !createWorkers(jk, peers6))
+        goto enomem;
+    if (!createInactiveWorkers(jk, peers4) || 
+        !createInactiveWorkers(jk, peers6))
+        goto enomem;
+
+    struct mapIterator it; 
+    mapIteratorInit(&it, jk->workers);
+    struct mapEntry *e = mapIteratorNext(&it);
+    while (e) {
+        nbWorkerConnect(loop, (struct worker *)e->val);
+        e = mapIteratorNext(&it);
+    }
+      
+    return;
+
+enomem:
+    listDestroy(peers4);
+    listDestroy(peers6);
+    jkLog(LT_ERROR, strerror(errno));
     stopEvLoop(loop);
+    return;
 }
 
 void nbJkSendTrackerRequest(struct evLoop *loop, struct jk *jk)

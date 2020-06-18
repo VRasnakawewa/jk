@@ -8,17 +8,10 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "ev.h"
+#include "reap.h"
 
 static char *defualtHttpHeaders[] = {NULL};
 static char *defaultQueryParams[] = {NULL};
-
-typedef void onResponseFn(struct evLoop *loop,
-                          void *callerData,
-                          char *response,
-                          size_t responseLen,
-                          int error,
-                          const char *errMsg);
 
 struct reapOpt {
     char *reqStr;
@@ -181,10 +174,10 @@ clear:
     return opt;
 }
 
-void destroyReapOpt(struct reapOpt *opt, int error)
+void destroyReapOpt(struct reapOpt *opt)
 {
     if (opt) {
-        if (error) free(opt->resStr);
+        free(opt->resStr);
         free(opt->reqStr);
         free(opt);
     }
@@ -193,23 +186,24 @@ void destroyReapOpt(struct reapOpt *opt, int error)
 static void onRecvReady(struct evLoop *loop,
         int sockfd, void *data, int mask)
 {
+    int errcode = 0;
     struct reapOpt *opt = (struct reapOpt *)data;
 
     int n = read(sockfd,
         opt->resStr + opt->resStrLen,
         opt->resStrCap - opt->resStrLen);
-    if (n == -1)
+    if (n == -1) {
+        errcode = errno; 
         goto error;
+    }
     if (n == 0) {
-        opt->resStr[opt->resStrLen] = '\0';
-
-        char *res = opt->resStr;
-        onResponseFn *onResponse = opt->onResponse;
-        onResponse(loop, opt->callerData, res, opt->resStrLen, 0, NULL);
-
         close(sockfd);
         removeFileEventEvLoop(loop, sockfd, mask);
-        destroyReapOpt(opt, 0);
+
+        opt->resStr[opt->resStrLen] = '\0';
+        opt->onResponse(loop, opt->callerData,
+            opt->resStr, opt->resStrLen, 0, NULL);
+        destroyReapOpt(opt);
         return;
     }
 
@@ -217,8 +211,10 @@ static void onRecvReady(struct evLoop *loop,
     if (opt->resStrLen >= opt->resStrCap) {
         opt->resStr = realloc(opt->resStr,
             opt->resStrCap + (opt->resStrCap >> 1));
-        if (!opt->resStr)
+        if (!opt->resStr) {
+            errcode = errno; 
             goto error;
+        }
         opt->resStrCap += opt->resStrCap >> 1;
     }
     return;
@@ -226,13 +222,14 @@ static void onRecvReady(struct evLoop *loop,
 error:
     removeFileEventEvLoop(loop, sockfd, mask);
     close(sockfd);
-    opt->onResponse(loop, opt->callerData, NULL, 0, 1, strerror(errno));
-    destroyReapOpt(opt,1);
+    opt->onResponse(loop, opt->callerData, NULL, 0, errcode, strerror);
+    destroyReapOpt(opt);
 }
 
 static void onSendReady(struct evLoop *loop,
         int sockfd, void *data, int mask)
 {
+    int errcode = 0;
     struct reapOpt *opt = (struct reapOpt *)data;
 
     if (opt->reqStrPos == opt->reqStrLen) {
@@ -242,6 +239,7 @@ static void onSendReady(struct evLoop *loop,
                 EV_READABLE,
                 onRecvReady,
                 opt)) {
+            errcode = errno;
             goto error;
         }
         return;
@@ -250,21 +248,24 @@ static void onSendReady(struct evLoop *loop,
     int n = write(sockfd,
         opt->reqStr + opt->reqStrPos,
         opt->reqStrLen - opt->reqStrPos);
-    if (n == -1)
+    if (n == -1) {
+        errcode = errno;
         goto error;
+    }
     opt->reqStrPos += n;
     return;
 
 error:
     removeFileEventEvLoop(loop, sockfd, mask);
     close(sockfd);
-    opt->onResponse(loop, opt->callerData, NULL, 0, 1, strerror(errno));
-    destroyReapOpt(opt,1);
+    opt->onResponse(loop, opt->callerData, NULL, 0, errcode, strerror);
+    destroyReapOpt(opt);
 }
 
 static void onConnect(struct evLoop *loop,
         int sockfd, void *data, int mask)
 {
+    int errcode = 0;
     struct reapOpt *opt = (struct reapOpt *)data;
 
     removeFileEventEvLoop(loop, sockfd, mask);
@@ -273,6 +274,7 @@ static void onConnect(struct evLoop *loop,
             EV_WRITABLE,
             onSendReady,
             opt)) {
+        errcode = errno;
         goto error;
     }
     return;
@@ -280,8 +282,8 @@ static void onConnect(struct evLoop *loop,
 error:
     removeFileEventEvLoop(loop, sockfd, mask);
     close(sockfd);
-    opt->onResponse(loop, opt->callerData, NULL, 0, 1, strerror(errno));
-    destroyReapOpt(opt,1);
+    opt->onResponse(loop, opt->callerData, NULL, 0, errcode, strerror);
+    destroyReapOpt(opt);
 }
 
 void reap(struct evLoop *loop,
@@ -296,7 +298,7 @@ void reap(struct evLoop *loop,
     if (loop->stop) return;
 
     int r;
-    const char *err = NULL;
+    int errcode = 0;
     struct addrinfo hints;
     struct addrinfo *info = NULL;
 
@@ -306,7 +308,8 @@ void reap(struct evLoop *loop,
 
     r = getaddrinfo(hostname, (port) ? port : "80", &hints, &info);
     if (r) {
-        onResponse(loop, callerData, NULL, 0, 1, gai_strerror(r));
+        onResponse(loop, callerData, NULL, 0,
+                r, (reapStrerrorFn *)gai_strerror);
         return;
     }
 
@@ -325,20 +328,27 @@ void reap(struct evLoop *loop,
             headers,
             params,
             onResponse);
-    if (!opt) goto error;
+    if (!opt) {
+        errcode = errno;
+        goto error;
+    }
 
     struct addrinfo *p;
     for (p = info; p; p = p->ai_next) {
         int sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-        if (sockfd == -1)
+        if (sockfd == -1) {
+            errcode = errno;
             continue;
+        }
         r = fcntl(sockfd, F_SETFL, O_NONBLOCK);
         if (r == -1) {
+            errcode = errno;
             close(sockfd);
             continue;
         }
         r = connect(sockfd, p->ai_addr, p->ai_addrlen);
         if (r == -1 && errno != EINPROGRESS) {
+            errcode = errno;
             close(sockfd);
             continue;
         }
@@ -347,6 +357,7 @@ void reap(struct evLoop *loop,
                 EV_WRITABLE,
                 onConnect,
                 opt)) {
+            errcode = errno;
             close(sockfd);
             continue;
         }
@@ -355,9 +366,9 @@ void reap(struct evLoop *loop,
     }
 
 error:
-    if (info) freeaddrinfo(info);
-    destroyReapOpt(opt,1);
-    onResponse(loop, callerData, NULL, 0, 1, !err ? strerror(errno) : err);
+    freeaddrinfo(info);
+    onResponse(loop, callerData, NULL, 0, errcode, strerror);
+    destroyReapOpt(opt);
     return;
 }
 

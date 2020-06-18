@@ -10,10 +10,13 @@
 #include "info.h"
 #include "ev.h"
 #include "reap.h"
-#include "client.h"
+#include "worker.h"
 
+#define JK_CONFIG_DEBUG 1
 #define JK_CONFIG_COMPACT "1"
-#define JK_CONFIG_CLIENT_PORT "6882"
+#define JK_CONFIG_CLIENT_PORT "10001"
+#define JK_CONFIG_MAX_ACTIVE_PEERS 30
+#define JK_CONFIG_MAX_INACTIVE_PEERS 50
 
 #define JK_EVENT_STARTED 0
 #define JK_EVENT_STOPED 1
@@ -38,8 +41,8 @@ struct jk {
     char *trackerId;
     u64 trackerIntervalSec;
     struct map *trackerResponse;
-    struct list *peers;
-    struct map *clients;
+    struct map *workersInactive;
+    struct map *workers;
     struct map *meta;
 };
 
@@ -47,6 +50,7 @@ struct jk {
 #define LT_ERROR 0
 #define LT_WARNING 1
 #define LT_INFO 2
+#define LT_DEBUG 3
 void jkLog(int type, const char *fmt, ...);
 
 struct jk *jkNew(unsigned char *hash, char *trackerUrl, struct map *meta);

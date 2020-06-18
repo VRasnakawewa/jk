@@ -161,6 +161,16 @@ void *mapGet(struct map *map, char *key)
     return NULL;
 }
 
+int mapHas(struct map *map, char *key)
+{
+    return mapGet(map, key) != NULL;
+}
+
+u64 mapSize(struct map *map)
+{
+    return map->count;
+}
+
 struct mapEntry *mapIteratorNext(struct mapIterator *it)
 {
     while (!it->cur && it->pos > 0)

@@ -33,6 +33,11 @@ void listDestroy(struct list *list)
     free(list);
 }
 
+int listIsEmpty(struct list *list)
+{
+    return list->len == 0;
+}
+
 static void _resizeList(struct list *list, u64 newcap)
 {
     list->values = realloc(list->values, sizeof(*list->values)*newcap);
@@ -57,5 +62,11 @@ void listAdd(struct list *list, void *val)
         }
     }
     list->values[list->len++] = val;
+}
+
+void *listPop(struct list *list)
+{
+    if (list->len == 0) return NULL;
+    return list->values[--list->len];
 }
 

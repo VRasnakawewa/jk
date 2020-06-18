@@ -14,6 +14,8 @@ struct list {
 
 struct list *listNew(u64 cap, void (*destroyValFn)(void *val));
 void listDestroy(struct list *list);
+int listIsEmpty(struct list *list);
 void listAdd(struct list *list, void *val);
+void *listPop(struct list *list);
 
 #endif

@@ -3,6 +3,15 @@
 
 #include "ev.h"
 
+typedef char *reapStrerrorFn(int errcode);
+
+typedef void onResponseFn(struct evLoop *loop,
+                          void *callerData,
+                          char *response,
+                          size_t responseLen,
+                          int errcode,
+                          reapStrerrorFn *reapStrerror);
+
 void reap(struct evLoop *loop,
           void *callerData,
           char *hostname,
@@ -10,11 +19,6 @@ void reap(struct evLoop *loop,
           char *path,
           char **headers,
           char **params,
-          void onResponseFn(struct evLoop *loop,
-                            void *callerData,
-                            char *response,
-                            size_t responseLen,
-                            int error,
-                            const char *errMsg));
+          onResponseFn *onResponse);
 
 #endif

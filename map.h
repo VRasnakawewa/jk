@@ -33,6 +33,8 @@ struct map *mapNew(u64 cap,
 void mapDestroy(struct map *map);
 void *mapPut(struct map *map, char *key, void *val);
 void *mapGet(struct map *map, char *key);
+int mapHas(struct map *map, char *key);
+u64 mapSize(struct map *map);
 
 static inline void mapIteratorInit(struct mapIterator *iter, struct map *map)
 {
