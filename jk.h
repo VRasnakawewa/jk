@@ -43,6 +43,7 @@ struct jk {
     struct map *trackerResponse;
     struct map *workersInactive;
     struct map *workers;
+    struct list *workQueue;
     struct map *meta;
 };
 

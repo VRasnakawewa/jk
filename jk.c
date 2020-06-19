@@ -61,6 +61,7 @@ struct jk *jkNew(unsigned char *hash, char *trackerUrl, struct map *meta)
     jk->trackerResponse = NULL;
     jk->workersInactive = NULL;
     jk->workers = NULL;
+    jk->workQueue = NULL;
     jk->meta = meta;
     return jk;
 }
@@ -204,13 +205,13 @@ static void nbOnTrackerResponse(struct evLoop *loop,
 
     struct benNode *peers4ben = mapGet(benAsMap(&res), "peers");
     struct benNode *peers6ben = mapGet(benAsMap(&res), "peers6");
-    struct list *peers4;
-    struct list *peers6;
+    struct list *peers4 = NULL;
+    struct list *peers6 = NULL;
     if (peers4ben)
         peers4 = unmarshalPeers(benAsJstr(peers4ben), AF_INET);
     if (peers6ben)
         peers6 = unmarshalPeers(benAsJstr(peers6ben), AF_INET6);
-    if (!peers4 || !peers6) {
+    if ((peers4ben && !peers4) || (peers6ben && !peers6)) {
         jkLog(LT_ERROR, strerror(errno));
         stopEvLoop(loop);
         return;
@@ -226,10 +227,13 @@ static void nbOnTrackerResponse(struct evLoop *loop,
         if (!jk->workers) goto enomem;
     }
 
-    if (!createWorkers(jk, peers4) || !createWorkers(jk, peers6))
+    if (peers4 && !createWorkers(jk, peers4))
         goto enomem;
-    if (!createInactiveWorkers(jk, peers4) || 
-        !createInactiveWorkers(jk, peers6))
+    if (peers6 && !createWorkers(jk, peers6))
+        goto enomem;
+    if (peers4 && !createInactiveWorkers(jk, peers4))
+        goto enomem;
+    if (peers6 && !createInactiveWorkers(jk, peers6))
         goto enomem;
 
     struct mapIterator it; 
@@ -239,7 +243,9 @@ static void nbOnTrackerResponse(struct evLoop *loop,
         nbWorkerConnect(loop, (struct worker *)e->val);
         e = mapIteratorNext(&it);
     }
-      
+ 
+    listDestroy(peers4);
+    listDestroy(peers6);
     return;
 
 enomem:

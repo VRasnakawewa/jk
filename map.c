@@ -161,6 +161,31 @@ void *mapGet(struct map *map, char *key)
     return NULL;
 }
 
+int mapRemove(struct map *map, char *key)
+{
+    u64 index = genHash(key) % map->cap;
+
+    struct mapEntry *prev = NULL; 
+    struct mapEntry *curr = map->table[index];
+    while (curr) {
+        if (!cmpJstr(key, curr->key)) {
+            if (prev)
+                prev->next = curr->next;
+            else
+                map->table[index] = curr->next;
+
+            map->count--;
+            if (map->destroyValFn)
+                map->destroyValFn(curr->val);
+            free(curr);
+            return 1;
+        }
+        prev = curr;
+        curr = curr->next;
+    }
+    return 0;
+}
+
 int mapHas(struct map *map, char *key)
 {
     return mapGet(map, key) != NULL;

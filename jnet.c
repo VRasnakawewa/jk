@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <assert.h>
 
 #include "jnet.h"
 
@@ -33,6 +34,14 @@ int jnetResolveNumericHost(struct addrinfo **info,
     hints.ai_flags = AI_NUMERICHOST;
 
     return getaddrinfo(ip, port, &hints, info);
+}
+
+int jnetGetSocketErrno(int fd)
+{
+    int err = 0;
+    int len = 1;
+    assert(getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) != -1);
+    return err;
 }
 
 int jnetSocket(struct addrinfo *info)
