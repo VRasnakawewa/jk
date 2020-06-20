@@ -1,3 +1,5 @@
+
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -9,6 +11,18 @@
 
 #include "worker.h"
 
+#define PSTR "BitTorrent protocol"
+
+#define MSG_CHOKE 0
+#define MSG_UNCHOKE 1
+#define MSG_INTERESTED 2
+#define MSG_NOT_INTERESTED 3
+#define MSG_HAVE 4
+#define MSG_BITFIELD 5
+#define MSG_REQUEST 6
+#define MSG_PIECE 7
+#define MSG_CANCEL 8
+
 struct worker *workerNew(char *id, struct jk *jk)
 {
     struct worker *worker;
@@ -19,7 +33,6 @@ struct worker *workerNew(char *id, struct jk *jk)
     worker->jk = jk;
     worker->sockfd = -1;
     worker->chocked = 0;
-    worker->retries = 0;
     worker->sendpos = 0;
     worker->sendlen = 0;
     worker->recvlen = 0;
@@ -27,6 +40,19 @@ struct worker *workerNew(char *id, struct jk *jk)
 }
 
 void workerDestroy(void *worker) { free(worker); }
+
+void workerResetSendBuf(struct worker *worker)
+{
+    worker->sendpos = 0;
+    worker->sendlen = 0;
+    memset(worker->sendbuf,0,sizeof(worker->sendbuf));
+}
+
+void workerResetRecvBuf(struct worker *worker)
+{
+    worker->recvlen = 0;
+    memset(worker->recvbuf,0,sizeof(worker->recvbuf));
+}
 
 static int buildHandshake(unsigned char *handshake,
                            const unsigned char *infoHash,
@@ -36,7 +62,7 @@ static int buildHandshake(unsigned char *handshake,
 
     handshake[i] = 19;
     i += 1;
-    memcpy(handshake + i, "BitTorrent protocol", 19);
+    memcpy(handshake + i, PSTR, 19);
     i += 19;
     memset(handshake + i, 0, 8);
     i += 8;
@@ -48,6 +74,40 @@ static int buildHandshake(unsigned char *handshake,
     return i;
 }
 
+static int verifyHandshake(const char *handshake, const char *infoHash)
+{
+    return handshake[0] == 19 &&
+        !memcmp(handshake + 1, PSTR, 19) &&
+        !memcmp(handshake + 1+19+8, infoHash, 20);
+}
+
+static void nbOnHandshakeRecv(struct evLoop *loop,
+        int sockfd, void *data, int mask)
+{
+    struct worker *worker = (struct worker *)data;
+
+    u64 n = recv(worker->sockfd, worker->recvbuf + worker->recvlen,
+        sizeof(worker->recvbuf) - worker->recvlen, 0);
+    if (n == -1) {
+        jkLog(LT_DEBUG, "recv: (%s) %s", worker->id, strerror(errno));
+        close(sockfd);
+        removeFileEventEvLoop(loop, sockfd, mask);
+        mapRemove(worker->jk->workers, worker->id);
+        return;
+    }
+    if (n == 0) {
+        removeFileEventEvLoop(loop, sockfd, mask);
+        if (verifyHandshake(worker->recvbuf, worker->jk->infoHash)) {
+            jkLog(LT_INFO, "🤝 with %s", worker->id);
+            workerResetSendBuf(worker);
+            workerResetRecvBuf(worker);
+            return;
+        }
+        return;
+    }
+    worker->recvlen += n; 
+}
+
 static void nbOnHandshakeSend(struct evLoop *loop,
         int sockfd, void *data, int mask)
 {
@@ -56,29 +116,24 @@ static void nbOnHandshakeSend(struct evLoop *loop,
     /* all sent */
     if (worker->sendpos == worker->sendlen) {
         removeFileEventEvLoop(loop, sockfd, mask);
+        if (!addFileEventEvLoop(loop,
+                sockfd,
+                EV_READABLE,
+                nbOnHandshakeRecv,
+                worker)) {
+            jkLog(LT_ERROR, strerror(errno));
+            stopEvLoop(loop);
+        }
         return;
     }
      
     u64 n = send(worker->sockfd, worker->sendbuf + worker->sendpos,
         worker->sendlen, 0);
     if (n == -1) {
-        int err = errno;
+        jkLog(LT_DEBUG, "send: (%s) %s", worker->id, strerror(errno));
         close(sockfd);
         removeFileEventEvLoop(loop, sockfd, mask);
-        /* retry */
-        if (err == EAGAIN) {
-            /* retry limit exceeded. remove the worker */
-            if (worker->retries >= WORKER_RETRIES_MAX) {
-                worker->retries = 0; 
-                mapRemove(worker->jk->workers, worker->id);
-                return;
-            }
-            jkLog(LT_DEBUG, strerror(errno));
-            nbWorkerConnect(loop, data);
-            return;
-        }
-        jkLog(LT_ERROR, strerror(errno));
-        stopEvLoop(loop);
+        mapRemove(worker->jk->workers, worker->id);
         return;
     }
     worker->sendpos += n;
@@ -91,23 +146,10 @@ static void nbOnConnect(struct evLoop *loop,
 
     int err = jnetGetSocketErrno(sockfd);
     if (err) {
+        jkLog(LT_DEBUG, "connect (%s): %s", worker->id, strerror(err));
         close(sockfd);
         removeFileEventEvLoop(loop, sockfd, mask);
-        /* retry */
-        if (err == EAGAIN || err == ETIMEDOUT || ECONNREFUSED) {
-            /* retry limit exceeded. remove the worker */
-            if (worker->retries >= WORKER_RETRIES_MAX) {
-                worker->retries = 0; 
-                mapRemove(worker->jk->workers, worker->id);
-                return;
-            }
-            worker->retries++;
-            jkLog(LT_DEBUG, strerror(err));
-            nbWorkerConnect(loop, worker);
-            return;
-        }
-        jkLog(LT_ERROR, strerror(err));
-        stopEvLoop(loop);
+        mapRemove(worker->jk->workers, worker->id);
         return;
     }
 

@@ -22,3 +22,8 @@ i64 infoGetTotalBytes(struct map *info)
     return length;
 }
 
+i64 infoGetPieceLen(struct map *info)
+{
+    return benAsI64(mapGet(info, "piece length"));
+}
+

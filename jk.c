@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
 #include "jk.h"
 
@@ -61,7 +62,6 @@ struct jk *jkNew(unsigned char *hash, char *trackerUrl, struct map *meta)
     jk->trackerResponse = NULL;
     jk->workersInactive = NULL;
     jk->workers = NULL;
-    jk->workQueue = NULL;
     jk->meta = meta;
     return jk;
 }

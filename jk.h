@@ -11,6 +11,7 @@
 #include "ev.h"
 #include "reap.h"
 #include "worker.h"
+#include "piece.h"
 
 #define JK_CONFIG_DEBUG 1
 #define JK_CONFIG_COMPACT "1"
@@ -28,23 +29,22 @@ static char *jk_events[] = {
 #define JK_EVENT_STR(event) jk_events[event]
 
 struct jk {
-    unsigned char id[20];
-    unsigned char infoHash[20];
-    int event;
-    u64 uploaded;
-    u64 downloaded;
-    u64 total;
-    u64 seeders;
-    u64 leechers;
-    char *trackerProto;
-    char *trackerUrl;
-    char *trackerId;
-    u64 trackerIntervalSec;
-    struct map *trackerResponse;
-    struct map *workersInactive;
-    struct map *workers;
-    struct list *workQueue;
-    struct map *meta;
+    unsigned char id[20];         /* jk peer id */
+    unsigned char infoHash[20];   /* info hash */
+    int event;                    /* event (started|stoped|completed) */
+    u64 uploaded;                 /* total uploaded bytes */
+    u64 downloaded;               /* total downloaded bytes */
+    u64 total;                    /* total bytes */
+    u64 seeders;                  /* number of seeders according to tracker */
+    u64 leechers;                 /* number of leechers according to tracker */
+    char *trackerProto;           /* tracker protocol (http|udp) */
+    char *trackerUrl;             /* tracker url */
+    char *trackerId;              /* tracker id for next announcements */
+    u64 trackerIntervalSec;       /* seconds jk should wait for the next tracker request */
+    struct map *trackerResponse;  /* decoded tracker response */
+    struct map *workersInactive;  /* set of inactive workers (no memory allocated) */
+    struct map *workers;          /* active workers */
+    struct map *meta;             /* decoded torrent file */
 };
 
 /* Log types */
