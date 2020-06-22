@@ -15,6 +15,7 @@ struct map {
     u64 count;
     u64 threshold;
     float loadFactor;
+    void (*destroyKeyFn)(void *key);
     void (*destroyValFn)(void *val);
     struct mapEntry **table;
 };
@@ -29,6 +30,7 @@ struct mapIterator {
 
 struct map *mapNew(u64 cap,
                    float loadFactor,
+                   void (*destroyKeyFn)(void *key),
                    void (*destroyValFn)(void *val));
 void mapDestroy(struct map *map);
 void *mapPut(struct map *map, char *key, void *val);

@@ -52,7 +52,9 @@ struct jk {
 #define LT_WARNING 1
 #define LT_INFO 2
 #define LT_DEBUG 3
-void jkLog(int type, const char *fmt, ...);
+
+#define jkLog(...) jkLogFunc(__FILE__, __LINE__, __VA_ARGS__)
+void jkLogFunc(char *file, int line, int type, const char *fmt, ...);
 
 struct jk *jkNew(unsigned char *hash, char *trackerUrl, struct map *meta);
 void jkDestroy(struct jk *jk);

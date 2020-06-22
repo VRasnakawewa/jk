@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "map.h"
-#include "jstr.h"
 
 static struct mapEntry *newMapEntry(char *key,
                                     void *val,
@@ -19,13 +18,9 @@ static struct mapEntry *newMapEntry(char *key,
     return e;
 }
 
-static void destroyKey(char *key)
-{
-    if (JSTR_VALID(key)) destroyJstr(key); else free(key);
-}
-
 struct map *mapNew(u64 cap,
                    float loadFactor,
+                   void (*destroyKeyFn)(void *key),
                    void (*destroyValFn)(void *val))
 {
     struct map *map;
@@ -36,6 +31,7 @@ struct map *mapNew(u64 cap,
     map->count = 0;
     map->loadFactor = loadFactor;
     map->threshold = (u64)(cap * loadFactor);
+    map->destroyKeyFn = destroyKeyFn;
     map->destroyValFn = destroyValFn;
     map->table = malloc(sizeof(*map->table)*cap);
     if (!map->table) {
@@ -54,7 +50,8 @@ void mapDestroy(struct map *map)
         struct mapEntry *e = map->table[i];
         while (e) {
             struct mapEntry *trash = e;
-            destroyKey(trash->key);
+            if (map->destroyKeyFn)
+                map->destroyKeyFn(trash->key);
             if (map->destroyValFn)
                 map->destroyValFn(trash->val);
             e = e->next;
@@ -76,7 +73,7 @@ static u64 djb2Hash(unsigned char *s, u64 len)
 
 static inline u64 genHash(char *s)
 {
-    return djb2Hash((unsigned char *)JSTR(s), lenJstr(s));
+    return djb2Hash((unsigned char *)s, strlen(s));
 }
 
 static void _rehashMap(struct map *map)
@@ -119,10 +116,11 @@ void *mapPut(struct map *map, char *key, void *val)
 
     struct mapEntry *e = map->table[index];
     while (e) {
-        if (!cmpJstr(key, e->key)) {
+        if (!strcmp(key, e->key)) {
             void *oldval = e->val;
             e->val = val;
-            destroyKey(key);
+            if (map->destroyKeyFn)
+                map->destroyKeyFn(key);
             return oldval;
         }
         e = e->next;
@@ -131,7 +129,8 @@ void *mapPut(struct map *map, char *key, void *val)
     if (map->count >= map->threshold) {
         _rehashMap(map);
         if (MAP_ALLOC_FAILED(map)) {
-            destroyKey(key);
+            if (map->destroyKeyFn)
+                map->destroyKeyFn(key);
             return NULL;
         }
     }
@@ -139,7 +138,8 @@ void *mapPut(struct map *map, char *key, void *val)
     struct mapEntry *new = newMapEntry(key, val, map->table[index]);
     if (!new) {
         mapDestroy(map);
-        destroyKey(key);
+        if (map->destroyKeyFn)
+            map->destroyKeyFn(key);
         map->table = NULL;
         return NULL;
     }
@@ -154,7 +154,7 @@ void *mapGet(struct map *map, char *key)
     struct mapEntry *e = map->table[genHash(key) % map->cap];
 
     while (e) {
-        if (!cmpJstr(key, e->key))
+        if (!strcmp(key, e->key))
             return e->val;
         e = e->next;
     }
@@ -168,7 +168,7 @@ int mapRemove(struct map *map, char *key)
     struct mapEntry *prev = NULL; 
     struct mapEntry *curr = map->table[index];
     while (curr) {
-        if (!cmpJstr(key, curr->key)) {
+        if (!strcmp(key, curr->key)) {
             if (prev)
                 prev->next = curr->next;
             else

@@ -12,7 +12,7 @@
 
 #include "jk.h"
 
-void jkLog(int type, const char *fmt, ...)
+void jkLogFunc(char *file, int line, int type, const char *fmt, ...)
 {
     if (type == LT_DEBUG && !JK_CONFIG_DEBUG) return;
 
@@ -25,7 +25,7 @@ void jkLog(int type, const char *fmt, ...)
     
     switch (type) {
     case LT_ERROR:
-        fprintf(stderr, "ERROR: %s\n", msg);
+        fprintf(stderr, "ERROR (%s:%d): %s\n", file, line, msg);
         break;
     case LT_WARNING:
         printf("WARNING: %s\n", msg);
@@ -34,7 +34,7 @@ void jkLog(int type, const char *fmt, ...)
         printf("INFO: %s\n", msg);
         break;
     default:
-        printf("DEBUG: %s\n", msg);
+        printf("DEBUG (%s:%d): %s\n", file, line, msg);
         break;
     }
 }
@@ -90,8 +90,8 @@ static struct list *unmarshalPeers(jstr peers, int family)
     for (u64 i = 0; i < lenJstr(peers); i += peersize) {
         unsigned char ipvx[peersize-2];
         unsigned char port[2];
-        memcpy(ipvx, JSTR(peers) + i, peersize-2);
-        memcpy(port, JSTR(peers) + i + peersize-2, 2);
+        memcpy(ipvx, peers + i, peersize-2);
+        memcpy(port, peers + i + peersize-2, 2);
 
         char ipvxstr[INET6_ADDRSTRLEN];
         inet_ntop(family, ipvx, ipvxstr, sizeof(ipvxstr));
@@ -218,12 +218,12 @@ static void nbOnTrackerResponse(struct evLoop *loop,
     }
 
     if (!jk->workersInactive) {
-        jk->workersInactive = mapNew(JK_CONFIG_MAX_INACTIVE_PEERS, 1.0, NULL);
+        jk->workersInactive = mapNew(JK_CONFIG_MAX_INACTIVE_PEERS, 1.0, free, NULL);
         if (!jk->workersInactive) goto enomem;
     }
 
     if (!jk->workers) {
-        jk->workers = mapNew(JK_CONFIG_MAX_ACTIVE_PEERS, 1.0, workerDestroy);
+        jk->workers = mapNew(JK_CONFIG_MAX_ACTIVE_PEERS, 1.0, free, workerDestroy);
         if (!jk->workers) goto enomem;
     }
 
@@ -332,11 +332,12 @@ int main(int argc, char **argv)
     struct jk *jk = NULL;
 
     metaRaw = readFile(filename);
+
     if (!metaRaw) {
         jkLog(LT_ERROR, strerror(errno));
         return 1;
     }
-    if (benDecode(&meta, JSTR(metaRaw), lenJstr(metaRaw)) != BEN_OK) {
+    if (benDecode(&meta, metaRaw, lenJstr(metaRaw)) != BEN_OK) {
         jkLog(LT_ERROR, (errno) ? strerror(errno) : "Couldn't decode the meta file");
         destroyJstr(metaRaw);
         return 1;
@@ -348,9 +349,9 @@ int main(int argc, char **argv)
         return 1;
     }
     announce = benAsJstr(mapGet(benAsMap(&meta), "announce"));
-    calculateInfoHash(infoHash, JSTR(metaRaw), lenJstr(metaRaw));
+    calculateInfoHash(infoHash, metaRaw, lenJstr(metaRaw));
     destroyJstr(metaRaw);
-    jk = jkNew(infoHash, JSTR(announce), benAsMap(&meta));
+    jk = jkNew(infoHash, announce, benAsMap(&meta));
     if (!jk) {
         jkLog(LT_ERROR, strerror(errno));
         mapDestroy(benAsMap(&meta));

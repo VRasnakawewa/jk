@@ -1,5 +1,5 @@
 CC=gcc
-CFLAG=-Wall -g
+CFLAG=-g -Wall
 LIBS=-lssl -lcrypto
 
 all: jk

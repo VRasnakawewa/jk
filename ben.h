@@ -42,10 +42,6 @@ struct benNode {
     int type;
 };
 
-int benEncodeI64(jstr *data, i64 num);
-int benEncodeJstr(jstr *data, jstr str);
-int benEncodeList(jstr *data, struct list *list);
-int benEncodeMap(jstr *data, struct map *map);
 int benDecode(struct benNode *node, unsigned char *data, u64 dataLen);
 int benEncode(jstr *data, struct benNode *node);
 
