@@ -1,12 +1,11 @@
 # jk
-jk is a single threaded torrent client written
-in C.
+Super fast, dead simple torrent client written in C.
 
 ## Feature highlights
 * Dead simple.
 * Tiny code base.
-* Do everything on an event loop.
-* Aming to have zero dependencies.
+* Asynchronous and single-threaded.
+* Zero dependencies.
 
 ## Building
 ```
